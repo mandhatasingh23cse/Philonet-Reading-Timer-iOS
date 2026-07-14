@@ -22,8 +22,15 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.0.app || sudo xcode-select -s /Applications/Xcode.app || true
           xcodebuild -version
 
-      - name: Inspect Project and Destinations
+      - name: Setup Simulator Device & Inspect Destinations
         run: |
+          echo "=== SETUP CI SIMULATOR ==="
+          DEVICE_TYPE=$(xcrun simctl list devicetypes | grep -i "iPhone" | head -n 1 | awk -F' - ' '{print $NF}' | tr -d '()')
+          RUNTIME=$(xcrun simctl list runtimes | grep -E -i "iOS [0-9]+" | tail -n 1 | awk -F' - ' '{print $NF}' | tr -d '()')
+          echo "DeviceType: $DEVICE_TYPE, Runtime: $RUNTIME"
+          xcrun simctl create "CI_iPhone" "$DEVICE_TYPE" "$RUNTIME" || xcrun simctl create "CI_iPhone" "iPhone 16" || true
+          xcrun simctl list devices available | grep -i "iPhone" | head -n 10
+          
           xcodebuild -list -project ReadLater.xcodeproj > destinations.log 2>&1 || true
           echo "=== DESTINATIONS ===" >> destinations.log
           xcodebuild -showdestinations -project ReadLater.xcodeproj -scheme ReadLater >> destinations.log 2>&1 || true
@@ -32,10 +39,11 @@ jobs:
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Building ReadLater for iOS Simulator using -sdk iphonesimulator..."
+          echo "Attempt 1: Building using id=dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
+            -destination 'id=dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder' \
             -derivedDataPath build/DerivedData \
             CODE_SIGN_ENTITLEMENTS="" \
             CODE_SIGN_IDENTITY="-" \
@@ -46,7 +54,23 @@ jobs:
             clean build 2>&1 | tee build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
-            echo "First attempt failed ($STATUS). Attempting build without clean..."
+            echo "Attempt 1 failed ($STATUS). Attempt 2: Building using platform=iOS Simulator,name=CI_iPhone..."
+            xcodebuild -project ReadLater.xcodeproj \
+              -scheme ReadLater \
+              -sdk iphonesimulator \
+              -destination 'platform=iOS Simulator,name=CI_iPhone' \
+              -derivedDataPath build/DerivedData \
+              CODE_SIGN_ENTITLEMENTS="" \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=YES \
+              CODE_SIGNING_ALLOWED=YES \
+              PROVISIONING_PROFILE_SPECIFIER="" \
+              DEVELOPMENT_TEAM="" \
+              build 2>&1 | tee -a build.log
+            STATUS=${PIPESTATUS[0]}
+          fi
+          if [ $STATUS -ne 0 ]; then
+            echo "Attempt 2 failed ($STATUS). Attempt 3: Building with -sdk iphonesimulator without destination flag..."
             xcodebuild -project ReadLater.xcodeproj \
               -scheme ReadLater \
               -sdk iphonesimulator \
