@@ -22,21 +22,27 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.0.app || sudo xcode-select -s /Applications/Xcode.app || true
           xcodebuild -version
 
-      - name: Inspect Project and Destinations
+      - name: Inspect Project and Setup Simulator
         run: |
           xcodebuild -list -project ReadLater.xcodeproj > destinations.log 2>&1 || true
           echo "=== DESTINATIONS ===" >> destinations.log
           xcodebuild -showdestinations -project ReadLater.xcodeproj -scheme ReadLater >> destinations.log 2>&1 || true
           cat destinations.log | head -n 40
+          
+          echo "=== SIMULATOR RUNTIMES & DEVICES ==="
+          xcrun simctl list runtimes > sim_runtimes.log 2>&1 || true
+          xcrun simctl list devices available > sim_devices.log 2>&1 || true
+          cat sim_runtimes.log | head -n 30
+          cat sim_devices.log | head -n 30
 
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Building ReadLater for iOS Simulator..."
+          echo "Building ReadLater using generic/platform=iOS Simulator..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/DerivedData \
             CODE_SIGN_ENTITLEMENTS="" \
             CODE_SIGN_IDENTITY="-" \
@@ -47,7 +53,23 @@ jobs:
             clean build 2>&1 | tee build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
-            echo "First attempt failed ($STATUS). Attempting build without clean and without specific destination name..."
+            echo "First attempt failed ($STATUS). Attempting build with name=Any iOS Simulator Device..."
+            xcodebuild -project ReadLater.xcodeproj \
+              -scheme ReadLater \
+              -sdk iphonesimulator \
+              -destination 'platform=iOS Simulator,name=Any iOS Simulator Device' \
+              -derivedDataPath build/DerivedData \
+              CODE_SIGN_ENTITLEMENTS="" \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=YES \
+              CODE_SIGNING_ALLOWED=YES \
+              PROVISIONING_PROFILE_SPECIFIER="" \
+              DEVELOPMENT_TEAM="" \
+              build 2>&1 | tee -a build.log
+            STATUS=${PIPESTATUS[0]}
+          fi
+          if [ $STATUS -ne 0 ]; then
+            echo "Second attempt failed ($STATUS). Attempting build without destination flag..."
             xcodebuild -project ReadLater.xcodeproj \
               -scheme ReadLater \
               -sdk iphonesimulator \
@@ -99,7 +121,7 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git checkout -b ci-logs
-          git add -f build.log destinations.log || true
+          git add -f build.log destinations.log sim_runtimes.log sim_devices.log || true
           git commit -m "CI diagnostic logs [skip ci]" || true
           git push origin ci-logs --force || true
 
@@ -111,3 +133,5 @@ jobs:
           path: |
             build.log
             destinations.log
+            sim_runtimes.log
+            sim_devices.log
