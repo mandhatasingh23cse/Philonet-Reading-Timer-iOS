@@ -25,15 +25,16 @@ jobs:
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Building ReadLater for iOS Simulator with Ad-Hoc code signing..."
+          echo "Building ReadLater for iOS Simulator without entitlements check..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CONFIGURATION_BUILD_DIR=build/Simulator \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_ENTITLEMENTS="" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM="" \
             clean build | tee build.log
@@ -45,9 +46,10 @@ jobs:
               -sdk iphonesimulator \
               -destination 'generic/platform=iOS Simulator' \
               CONFIGURATION_BUILD_DIR=build/Simulator \
-              CODE_SIGN_IDENTITY="-" \
-              CODE_SIGNING_REQUIRED=YES \
-              CODE_SIGNING_ALLOWED=YES \
+              CODE_SIGN_ENTITLEMENTS="" \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
               PROVISIONING_PROFILE_SPECIFIER="" \
               DEVELOPMENT_TEAM="" \
               clean build | tee -a build.log
@@ -56,7 +58,7 @@ jobs:
           if [ $STATUS -ne 0 ]; then
             echo "### ❌ Build Failed!" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-            tail -n 60 build.log >> $GITHUB_STEP_SUMMARY
+            tail -n 80 build.log >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             exit $STATUS
           fi

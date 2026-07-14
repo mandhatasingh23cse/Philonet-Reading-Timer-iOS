@@ -8,10 +8,11 @@ struct ReadLaterApp: App {
     @State private var environment: AppEnvironment
 
     init() {
-        do { container = try ModelContainer(for: Article.self, ReadingSession.self) }
+        let modelContainer: ModelContainer
+        do { modelContainer = try ModelContainer(for: Article.self, ReadingSession.self) }
         catch { fatalError("Unable to initialize local article storage: \(error.localizedDescription)") }
-        self.container = container
-        _environment = State(initialValue: AppEnvironment(container: container))
+        self.container = modelContainer
+        _environment = State(initialValue: AppEnvironment(container: modelContainer))
     }
 
     var body: some Scene {
