@@ -14,14 +14,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_16.1.app || true
+      - name: Select and Verify Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.0.app || sudo xcode-select -s /Applications/Xcode.app || true
+          xcodebuild -version
 
-      - name: List Xcode Project Info
-        run: xcodebuild -list -project ReadLater.xcodeproj
+      - name: Inspect Project (Optional)
+        run: xcodebuild -list -project ReadLater.xcodeproj || echo "xcodebuild -list encountered non-fatal warning"
 
       - name: Build ReadLater Simulator Bundle
         run: |
+          set +e
+          echo "Attempting build with scheme ReadLater..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
@@ -31,6 +35,23 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             clean build
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "Scheme build failed with exit code $STATUS. Attempting direct target build..."
+            xcodebuild -project ReadLater.xcodeproj \
+              -target ReadLater \
+              -sdk iphonesimulator \
+              CONFIGURATION_BUILD_DIR=build/Simulator \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              clean build
+            STATUS=$?
+          fi
+          if [ $STATUS -ne 0 ]; then
+            echo "Direct target build also failed ($STATUS)."
+            exit $STATUS
+          fi
 
       - name: Package Simulator App into Zip
         run: |
