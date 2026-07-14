@@ -19,37 +19,45 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.0.app || sudo xcode-select -s /Applications/Xcode.app || true
           xcodebuild -version
 
-      - name: Inspect Project (Optional)
-        run: xcodebuild -list -project ReadLater.xcodeproj || echo "xcodebuild -list encountered non-fatal warning"
+      - name: Inspect Project
+        run: xcodebuild -list -project ReadLater.xcodeproj || true
 
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Attempting build with scheme ReadLater..."
+          echo "Building ReadLater for iOS Simulator with Ad-Hoc code signing..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CONFIGURATION_BUILD_DIR=build/Simulator \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            clean build
-          STATUS=$?
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="" \
+            clean build | tee build.log
+          STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
             echo "Scheme build failed with exit code $STATUS. Attempting direct target build..."
             xcodebuild -project ReadLater.xcodeproj \
               -target ReadLater \
               -sdk iphonesimulator \
+              -destination 'generic/platform=iOS Simulator' \
               CONFIGURATION_BUILD_DIR=build/Simulator \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
-              clean build
-            STATUS=$?
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=YES \
+              CODE_SIGNING_ALLOWED=YES \
+              PROVISIONING_PROFILE_SPECIFIER="" \
+              DEVELOPMENT_TEAM="" \
+              clean build | tee -a build.log
+            STATUS=${PIPESTATUS[0]}
           fi
           if [ $STATUS -ne 0 ]; then
-            echo "Direct target build also failed ($STATUS)."
+            echo "### ❌ Build Failed!" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            tail -n 60 build.log >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             exit $STATUS
           fi
 
