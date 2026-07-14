@@ -20,23 +20,26 @@ jobs:
       - name: Select Xcode with iOS Simulator Support
         run: |
           FOUND_XCODE=""
-          for xcode in /Applications/Xcode*.app; do
-            echo "=== TESTING $xcode ==="
-            sudo xcode-select -s "$xcode" || continue
-            xcodebuild -version
-            xcodebuild -showdestinations -project ReadLater.xcodeproj -scheme ReadLater > test_dest.log 2>&1 || true
-            if grep -q "iOS Simulator" test_dest.log; then
-              echo "SUCCESS: Found iOS Simulator destinations in $xcode!"
-              cat test_dest.log | head -n 30
-              FOUND_XCODE="$xcode"
-              break
-            else
-              echo "No iOS Simulator destinations in $xcode"
+          for xcode in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.0.app /Applications/Xcode_16.app /Applications/Xcode.app; do
+            if [ -d "$xcode" ]; then
+              echo "=== TESTING $xcode ==="
+              sudo xcode-select -s "$xcode" || continue
+              xcrun simctl list runtimes > /dev/null 2>&1 || true
+              xcodebuild -showdestinations -project ReadLater.xcodeproj -scheme ReadLater > test_dest.log 2>&1 || true
+              if grep -i -q "iOS Simulator" test_dest.log; then
+                echo "SUCCESS: Found iOS Simulator destinations in $xcode!"
+                cat test_dest.log | head -n 30
+                FOUND_XCODE="$xcode"
+                break
+              else
+                echo "No iOS Simulator destinations in $xcode"
+              fi
             fi
           done
           if [ -z "$FOUND_XCODE" ]; then
-            echo "Warning: No Xcode explicitly showed iOS Simulator in showdestinations. Defaulting to Xcode 16.2..."
+            echo "Warning: No Xcode explicitly showed iOS Simulator in showdestinations. Defaulting to /Applications/Xcode_16.2.app or default..."
             sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode.app || true
+            xcrun simctl list runtimes > /dev/null 2>&1 || true
           fi
           xcodebuild -version
 
@@ -48,7 +51,7 @@ jobs:
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Building ReadLater for iOS Simulator using -sdk iphonesimulator..."
+          echo "Attempt 1: Building ReadLater using -sdk iphonesimulator without destination flag..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
@@ -62,10 +65,27 @@ jobs:
             clean build 2>&1 | tee build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
-            echo "Clean build failed ($STATUS). Attempting build without clean..."
+            echo "Attempt 1 failed ($STATUS). Attempt 2: Building using -destination 'generic/platform=iOS Simulator'..."
             xcodebuild -project ReadLater.xcodeproj \
               -scheme ReadLater \
               -sdk iphonesimulator \
+              -destination 'generic/platform=iOS Simulator' \
+              -derivedDataPath build/DerivedData \
+              CODE_SIGN_ENTITLEMENTS="" \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=YES \
+              CODE_SIGNING_ALLOWED=YES \
+              PROVISIONING_PROFILE_SPECIFIER="" \
+              DEVELOPMENT_TEAM="" \
+              build 2>&1 | tee -a build.log
+            STATUS=${PIPESTATUS[0]}
+          fi
+          if [ $STATUS -ne 0 ]; then
+            echo "Attempt 2 failed ($STATUS). Attempt 3: Building using -destination 'id=dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder'..."
+            xcodebuild -project ReadLater.xcodeproj \
+              -scheme ReadLater \
+              -sdk iphonesimulator \
+              -destination 'id=dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder' \
               -derivedDataPath build/DerivedData \
               CODE_SIGN_ENTITLEMENTS="" \
               CODE_SIGN_IDENTITY="-" \
