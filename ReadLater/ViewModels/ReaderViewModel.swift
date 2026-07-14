@@ -5,7 +5,7 @@ import Observation
     private let repository: ArticleRepository; private let merger: MergeServiceProtocol; private let debug: DebugService
     private var checkpoint: TimeInterval = 0; private var persistedBase: TimeInterval
     var lastMergeRule = MergeRule.noChange
-    init(article: Article, repository: ArticleRepository, debug: DebugService, timer: TimerService = TimerService(), merger: MergeServiceProtocol = MergeService()) { self.article = article; self.repository = repository; self.debug = debug; self.timer = timer; persistedBase = article.totalReadingTime }
+    init(article: Article, repository: ArticleRepository, debug: DebugService, timer: TimerService? = nil, merger: MergeServiceProtocol = MergeService()) { self.article = article; self.repository = repository; self.debug = debug; self.timer = timer ?? TimerService(); persistedBase = article.totalReadingTime }
     func appear(isActive: Bool) { if isActive { timer.start(); debug.record(.timer, "Reader timer started") }; updateDebug() }
     func disappear() { timer.pause(); persist() }
     func lifecycleChanged(active: Bool) { if active { timer.start() } else { timer.pause(); persist() }; updateDebug() }
