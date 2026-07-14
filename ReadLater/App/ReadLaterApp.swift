@@ -34,7 +34,7 @@ final class AppEnvironment {
     let sharedInbox = SharedURLInbox()
     init(container: ModelContainer) { repository = SwiftDataArticleRepository(context: ModelContext(container)) }
     func importSharedURLs() async {
-        for url in sharedInbox.consume() { do { _ = try await repository.save(url: url, title: url.host ?? url.absoluteString); debug.record(.storage, "Imported shared URL: \(url.host ?? url.absoluteString)") } catch { debug.record(.error, "Share import failed: \(error.localizedDescription)") } }
+        for url in sharedInbox.consume() { do { _ = try repository.save(url: url, title: url.host ?? url.absoluteString); debug.record(.storage, "Imported shared URL: \(url.host ?? url.absoluteString)") } catch { debug.record(.error, "Share import failed: \(error.localizedDescription)") } }
     }
     func handleScenePhase(_ phase: ScenePhase) { lifecycle.phase = phase; debug.record(.lifecycle, "Scene phase: \(String(describing: phase))") }
 }
