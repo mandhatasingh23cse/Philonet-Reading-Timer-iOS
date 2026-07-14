@@ -25,16 +25,16 @@ jobs:
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Building ReadLater for iOS Simulator without entitlements check..."
+          echo "Building ReadLater for iOS Simulator with Ad-Hoc signing (-) and empty entitlements..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             CONFIGURATION_BUILD_DIR=build/Simulator \
             CODE_SIGN_ENTITLEMENTS="" \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
             PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM="" \
             clean build | tee build.log
@@ -47,9 +47,9 @@ jobs:
               -destination 'generic/platform=iOS Simulator' \
               CONFIGURATION_BUILD_DIR=build/Simulator \
               CODE_SIGN_ENTITLEMENTS="" \
-              CODE_SIGN_IDENTITY="" \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=YES \
+              CODE_SIGNING_ALLOWED=YES \
               PROVISIONING_PROFILE_SPECIFIER="" \
               DEVELOPMENT_TEAM="" \
               clean build | tee -a build.log
@@ -73,3 +73,10 @@ jobs:
         with:
           name: ReadLater-Simulator
           path: build/Simulator/ReadLater-Simulator.zip
+
+      - name: Upload Build Diagnostics Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build.log
