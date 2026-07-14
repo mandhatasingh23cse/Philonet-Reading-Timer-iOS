@@ -84,7 +84,7 @@ jobs:
             exit $STATUS
           fi
 
-      - name: Package Simulator App into Zip
+      - name: Prepare Simulator App Bundle
         run: |
           APP_PATH=$(find build/DerivedData -name "ReadLater.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
@@ -93,14 +93,12 @@ jobs:
           fi
           mkdir -p build/Simulator
           cp -r "$APP_PATH" build/Simulator/
-          cd build/Simulator
-          zip -r ReadLater-Simulator.zip ReadLater.app
 
-      - name: Upload Simulator App Artifact
+      - name: Upload Simulator App Artifact for Appetize
         uses: actions/upload-artifact@v4
         with:
-          name: ReadLater-Simulator
-          path: build/Simulator/ReadLater-Simulator.zip
+          name: ReadLater-Appetize-Bundle
+          path: build/Simulator/ReadLater.app
 
       - name: Upload and Push Diagnostic Logs on Failure/Always
         if: always()
