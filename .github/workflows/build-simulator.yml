@@ -51,10 +51,12 @@ jobs:
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Attempt 1: Building ReadLater using -sdk iphonesimulator without destination flag..."
+          echo "Attempt 1: Building ReadLater universal simulator bundle (x86_64 + arm64)..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS="x86_64 arm64" \
             -derivedDataPath build/DerivedData \
             CODE_SIGN_ENTITLEMENTS="" \
             CODE_SIGN_IDENTITY="-" \
@@ -70,6 +72,8 @@ jobs:
               -scheme ReadLater \
               -sdk iphonesimulator \
               -destination 'generic/platform=iOS Simulator' \
+              ONLY_ACTIVE_ARCH=NO \
+              ARCHS="x86_64 arm64" \
               -derivedDataPath build/DerivedData \
               CODE_SIGN_ENTITLEMENTS="" \
               CODE_SIGN_IDENTITY="-" \
@@ -81,11 +85,13 @@ jobs:
             STATUS=${PIPESTATUS[0]}
           fi
           if [ $STATUS -ne 0 ]; then
-            echo "Attempt 2 failed ($STATUS). Attempt 3: Building using -destination 'id=dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder'..."
+            echo "Attempt 2 failed ($STATUS). Attempt 3: Building using placeholder destination..."
             xcodebuild -project ReadLater.xcodeproj \
               -scheme ReadLater \
               -sdk iphonesimulator \
               -destination 'id=dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder' \
+              ONLY_ACTIVE_ARCH=NO \
+              ARCHS="x86_64 arm64" \
               -derivedDataPath build/DerivedData \
               CODE_SIGN_ENTITLEMENTS="" \
               CODE_SIGN_IDENTITY="-" \
@@ -104,28 +110,41 @@ jobs:
             exit $STATUS
           fi
 
-      - name: Prepare Simulator App Bundle
+      - name: Prepare Universal Appetize Bundle
         run: |
           APP_PATH=$(find build/DerivedData -name "ReadLater.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "Could not find ReadLater.app inside build/DerivedData"
             exit 1
           fi
-          mkdir -p build/Simulator
-          cp -r "$APP_PATH" build/Simulator/
+          echo "Found compiled app at: $APP_PATH"
+          file "$APP_PATH/ReadLater"
+          
+          mkdir -p build/AppetizeRoot
+          cp -R "$APP_PATH" build/AppetizeRoot/ReadLater.app
+          
+          cd build/AppetizeRoot
+          zip -ry ../ReadLater-Appetize-Ready.zip ReadLater.app
+          cd ../..
 
-      - name: Upload Simulator App Artifact for Appetize
+      - name: Upload Appetize Enclosing Folder
         uses: actions/upload-artifact@v4
         with:
-          name: ReadLater-Appetize-Bundle
-          path: build/Simulator/ReadLater.app
+          name: ReadLater-Appetize
+          path: build/AppetizeRoot/
+
+      - name: Upload Pre-Zipped Appetize Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReadLater-Appetize-Zip
+          path: build/ReadLater-Appetize-Ready.zip
 
       - name: Upload and Push Diagnostic Logs on Failure/Always
         if: always()
         run: |
           if [ -f build.log ]; then
             echo "--- ANNOTATING ERRORS ---"
-            grep -i -C 2 -E "error:|failed|fatal|cannot|xcodebuild:" build.log | head -n 30 | while read -r line; do
+            grep -E "error:|xcodebuild: error:|fatal:|FAILED:" build.log | head -n 30 | while read -r line; do
               echo "::error title=Xcode Error::$line"
             done
           fi
