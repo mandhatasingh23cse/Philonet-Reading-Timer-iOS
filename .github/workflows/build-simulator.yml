@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build for iOS Simulator
@@ -21,18 +24,20 @@ jobs:
 
       - name: Inspect Project and Destinations
         run: |
-          xcodebuild -list -project ReadLater.xcodeproj || true
-          xcodebuild -showdestinations -project ReadLater.xcodeproj -scheme ReadLater || true
+          xcodebuild -list -project ReadLater.xcodeproj > destinations.log 2>&1 || true
+          echo "=== DESTINATIONS ===" >> destinations.log
+          xcodebuild -showdestinations -project ReadLater.xcodeproj -scheme ReadLater >> destinations.log 2>&1 || true
+          cat destinations.log | head -n 40
 
       - name: Build ReadLater Simulator Bundle
         run: |
           set +e
-          echo "Building ReadLater for iOS Simulator with Ad-Hoc signing (-) and specific iPhone 16 destination..."
+          echo "Building ReadLater for iOS Simulator..."
           xcodebuild -project ReadLater.xcodeproj \
             -scheme ReadLater \
             -sdk iphonesimulator \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
-            CONFIGURATION_BUILD_DIR=build/Simulator \
+            -derivedDataPath build/DerivedData \
             CODE_SIGN_ENTITLEMENTS="" \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=YES \
@@ -42,18 +47,18 @@ jobs:
             clean build 2>&1 | tee build.log
           STATUS=${PIPESTATUS[0]}
           if [ $STATUS -ne 0 ]; then
-            echo "iPhone 16 destination build failed with exit code $STATUS. Attempting fallback simulator destination without specific name..."
+            echo "First attempt failed ($STATUS). Attempting build without clean and without specific destination name..."
             xcodebuild -project ReadLater.xcodeproj \
               -scheme ReadLater \
               -sdk iphonesimulator \
-              CONFIGURATION_BUILD_DIR=build/Simulator \
+              -derivedDataPath build/DerivedData \
               CODE_SIGN_ENTITLEMENTS="" \
               CODE_SIGN_IDENTITY="-" \
               CODE_SIGNING_REQUIRED=YES \
               CODE_SIGNING_ALLOWED=YES \
               PROVISIONING_PROFILE_SPECIFIER="" \
               DEVELOPMENT_TEAM="" \
-              clean build 2>&1 | tee -a build.log
+              build 2>&1 | tee -a build.log
             STATUS=${PIPESTATUS[0]}
           fi
           if [ $STATUS -ne 0 ]; then
@@ -66,6 +71,13 @@ jobs:
 
       - name: Package Simulator App into Zip
         run: |
+          APP_PATH=$(find build/DerivedData -name "ReadLater.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Could not find ReadLater.app inside build/DerivedData"
+            exit 1
+          fi
+          mkdir -p build/Simulator
+          cp -r "$APP_PATH" build/Simulator/
           cd build/Simulator
           zip -r ReadLater-Simulator.zip ReadLater.app
 
@@ -75,9 +87,27 @@ jobs:
           name: ReadLater-Simulator
           path: build/Simulator/ReadLater-Simulator.zip
 
-      - name: Upload Build Diagnostics Log
+      - name: Upload and Push Diagnostic Logs on Failure/Always
+        if: always()
+        run: |
+          if [ -f build.log ]; then
+            echo "--- ANNOTATING ERRORS ---"
+            grep -i -C 2 -E "error:|failed|fatal|cannot|xcodebuild:" build.log | head -n 30 | while read -r line; do
+              echo "::error title=Xcode Error::$line"
+            done
+          fi
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git checkout -b ci-logs
+          git add -f build.log destinations.log || true
+          git commit -m "CI diagnostic logs [skip ci]" || true
+          git push origin ci-logs --force || true
+
+      - name: Upload Build Logs Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
-          path: build.log
+          path: |
+            build.log
+            destinations.log
